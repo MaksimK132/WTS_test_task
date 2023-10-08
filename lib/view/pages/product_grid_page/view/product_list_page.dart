@@ -1,44 +1,49 @@
 import 'package:flutter/material.dart';
-import 'package:online_shop_app/model/category.dart';
-import 'package:online_shop_app/model/product.dart';
+import 'package:online_shop_app/controller/product_api_controller.dart';
+import 'package:online_shop_app/model/entity/category.dart';
+import 'package:online_shop_app/model/entity/product.dart';
 import 'package:online_shop_app/model/repositories/product_api.dart';
+import 'package:online_shop_app/view/pages/product_grid_page/widget/product_list_tile.dart';
 
-class CategoryDetailScreen extends StatefulWidget {
+class ProductListPage extends StatefulWidget {
   final Category category;
 
-  CategoryDetailScreen({required this.category});
+  ProductListPage({required this.category});
 
   @override
   _CategoryDetailState createState() => _CategoryDetailState();
 }
 
-class _CategoryDetailState extends State<CategoryDetailScreen> {
-  final ScrollController _scrollController = ScrollController();
+class _CategoryDetailState extends State<ProductListPage> {
+  final ProductApiController productController = ProductApiController(
+    baseApiUrl: 'http://ostest.whitetigersoft.ru/api/common',
+    appKey:
+        'phynMLgDkiG06cECKA3LJATNiUZ1ijs-eNhTf0IGq4mSpJF3bD42MjPUjWwj7sqLuPy4_nBCOyX3-fRiUl6rnoCjQ0vYyKb-LR03x9kYGq53IBQ5SrN8G1jSQjUDplXF',
+  );
+
+  late ScrollController _scrollController;
   bool _isLoading = false;
   bool _hasMore = true;
-  int _page = 1;
+  int _offset = 1;
   List<Product> _products = [];
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _loadProducts();
     _scrollController.addListener(_scrollListener);
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
   void _scrollListener() {
-    if (_scrollController.offset >=
-            _scrollController.position.maxScrollExtent &&
-        !_scrollController.position.outOfRange) {
-      if (!_isLoading && _hasMore) {
-        _loadProducts();
-      }
+    final screenHeight = MediaQuery.of(context).size.height;
+    final currentPosition = _scrollController.position.pixels;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+
+    if (maxScroll - currentPosition <= screenHeight &&
+        !_isLoading &&
+        _hasMore) {
+      _loadProducts();
     }
   }
 
@@ -52,16 +57,19 @@ class _CategoryDetailState extends State<CategoryDetailScreen> {
     });
 
     try {
-      final List<Product> newProducts = await fetchProducts(
+      final Map<String, dynamic> data = await productController.fetchProducts(
         widget.category.categoryId,
-        page: _page,
+        offset: _offset,
       );
+
+      final List<Product> newProducts =
+          ProductDataProcessor().processProducts(data);
 
       if (newProducts.isEmpty) {
         _hasMore = false;
       } else {
         _products.addAll(newProducts);
-        _page++;
+        _offset++;
       }
     } catch (e) {
       debugPrint('Error loading products: $e');
@@ -84,11 +92,10 @@ class _CategoryDetailState extends State<CategoryDetailScreen> {
         itemBuilder: (context, index) {
           if (index < _products.length) {
             final product = _products[index];
-            return ListTile(
-              title: Text(product.title),
-              subtitle: Text('Price: ${product.price}'),
-              trailing: Image.network(
-                  'https://www.jtcrussia.ru/product_pictures/clean/ba8/248941.jpg'),
+            return ProductListTile(
+              title: product.title,
+              price: product.price,
+              imageUrl: product.imageUrl,
             );
           } else if (_hasMore) {
             return const Padding(
